@@ -35,10 +35,13 @@ The developer then approved the proposal.
 | Independent review and end-to-end run | 07 | a fresh subagent (see below) |
 | Documentation; Docker and CI | 08; 09 | two subagents in parallel |
 | Final audit | 10 | after this document was written |
+| Config test and Playwright end-to-end tests | after 10 | a further subagent; re-verified by the orchestrator |
 
 Each subagent brief contained: the `PROMPTS.md` sections to read, the design decisions already settled, explicit out-of-scope items, a ban on state-changing git commands, and a list of validation commands that had to be actually run and reported with their real output.
 
 The PROMPT 07 reviewer was given the code and the assignment but none of the earlier agents' conclusions. It was asked to review, run the real stack end to end for the first time (curl through the Vite proxy, and a headless Chromium Playwright script kept outside the repository), and fix only meaningful issues.
+
+The PROMPT 10 final audit reported a backend total coverage of 79.2% (`internal/config` and `cmd/api` untested) and no end-to-end test in the repository. The developer decided to add a test for `internal/config` and Playwright end-to-end tests that run the browser against the real Go server and Vite dev server. A further Opus 5.5 subagent implemented them, and the orchestrator re-verified the result.
 
 The resulting commits are visible with `git log`.
 
@@ -84,5 +87,5 @@ Deviations from the playbook:
 
 - No screen-reader testing.
 - Colour contrast was not measured with a tool.
-- Only Chromium was driven in browser checks.
-- The GitHub Actions workflow was not executed locally.
+- Only Chromium was driven in browser checks, and the end-to-end suite is configured for Chromium only.
+- The GitHub Actions workflow, including the end-to-end job, was not executed locally.

@@ -1,6 +1,6 @@
 .PHONY: install backend-run backend-test backend-lint backend-build backend-coverage \
 	frontend-dev frontend-test frontend-lint frontend-build frontend-coverage \
-	test lint build coverage docker-up docker-down
+	e2e test lint build coverage docker-up docker-down
 
 install:
 	cd frontend && npm ci
@@ -35,6 +35,10 @@ frontend-build:
 
 frontend-coverage:
 	cd frontend && npm run test:coverage
+
+# Needs the browser once: cd frontend && npx playwright install chromium
+e2e:
+	cd frontend && npm run test:e2e
 
 test: backend-test frontend-test
 lint: backend-lint frontend-lint

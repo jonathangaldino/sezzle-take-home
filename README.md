@@ -36,6 +36,7 @@ A full-stack calculator: a React + TypeScript single-page app that sends every c
 |---|---|
 | Frontend | React 19, TypeScript, Vite 8, CSS Modules |
 | Frontend tests | Vitest 5, React Testing Library, jsdom, `@vitest/coverage-v8` |
+| End-to-end tests | Playwright (Chromium only) against the real Go server and Vite dev server |
 | Frontend lint | oxlint (what the current Vite `react-ts` template ships, not ESLint) |
 | Backend | Go 1.26, standard library only (`net/http`, `encoding/json`); `go.mod` has no dependencies |
 | Backend tests | `testing`, `net/http/httptest`, table-driven |
@@ -70,16 +71,17 @@ Frontend (`frontend/src/`):
 
 ```
 .
-├── .github/workflows/ci.yml          CI: Go and frontend checks
+├── .github/workflows/ci.yml          CI: Go, frontend and end-to-end checks
 ├── backend/
 │   ├── cmd/api/main.go               server entry point
 │   ├── internal/
 │   │   ├── calculator/               domain logic + tests
-│   │   ├── config/                   env configuration
+│   │   ├── config/                   env configuration + test
 │   │   └── http/                     router, handler, errors + tests
 │   ├── Dockerfile
 │   └── go.mod
 ├── frontend/
+│   ├── e2e/                          Playwright end-to-end tests
 │   ├── src/
 │   │   ├── features/calculator/      UI, hook, number parsing/formatting + tests
 │   │   ├── services/                 API client + tests
@@ -89,6 +91,7 @@ Frontend (`frontend/src/`):
 │   ├── Dockerfile
 │   ├── nginx.conf                    serves the build, proxies /api/
 │   ├── package.json
+│   ├── playwright.config.ts          starts both servers for the e2e tests
 │   └── vite.config.ts                dev proxy + Vitest config
 ├── docs/decisions/                   ADRs 0001–0006
 ├── docker-compose.yml
@@ -109,6 +112,7 @@ The playbook's suggested `components/`, `hooks/` and `types/` directories were n
 | Node.js | 22.22.2+, 24.15+, or 26+ | intersection of the `engines` ranges of jsdom, Vitest and Vite |
 | npm | bundled with Node | lockfile install via `npm ci` |
 | make | any | optional; every target wraps a plain command shown below |
+| Chromium for Playwright | the build pinned by `@playwright/test` | end-to-end tests only; install once with `cd frontend && npx playwright install chromium` |
 
 Verified with Go 1.26.5, Node 26.13.0 and npm 11.20.0 on macOS.
 
@@ -145,6 +149,7 @@ If the backend is down, the dev proxy answers 502 and the UI reports the service
 | `make lint` | `gofmt -l` (fails on any output) + `go vet ./...`, and `npm run lint` (`oxlint`) |
 | `make build` | `go build -o bin/api ./cmd/api` and `npm run build` (`tsc -b && vite build`, output in `frontend/dist/`) |
 | `make coverage` | `go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out`, and `npm run test:coverage` |
+| `make e2e` | `cd frontend && npm run test:e2e` (`playwright test`); not part of `make test` |
 | `make docker-up` / `make docker-down` | `docker compose up --build` / `docker compose down` |
 
 Each `backend-*` / `frontend-*` target also exists on its own (`make backend-test`, `make frontend-lint`, ...).
@@ -163,8 +168,19 @@ make coverage
 | `backend/internal/http` | status codes and error codes for every error path via `httptest`, unknown fields, `null` operands, trailing data, 1 MB limit, JSON 404/405 with `Allow` (incl. HEAD/OPTIONS), unclean-path redirects, panic recovery, unexpected domain errors |
 | `frontend/src/services` | API client: success, envelope errors, network failure, proxy 502/503/504, malformed responses, abort, base URL handling |
 | `frontend/src/features/calculator`, `App` | parsing/formatting rules, form behaviour, validation and focus, loading, error display, clearing stale results |
+| `backend/internal/config` | default port, `PORT` override |
+| `frontend/e2e` (Playwright) | the browser against the real Go server through the Vite proxy, no mocking: a binary operation, square root with one operand, percentage, the division-by-zero message from the backend, invalid input blocked with no request sent, `0.1 + 0.2` displayed as `0.3`, Clear, and a 375 px viewport with no horizontal scroll |
 
-Totals at the time of writing: backend 11 test functions (102 passing tests including subtests); frontend 77 tests in 4 files.
+Totals at the time of writing: backend 12 test functions (105 passing tests including subtests); frontend 77 unit tests in 4 files; 8 end-to-end tests.
+
+### End-to-end tests
+
+```sh
+cd frontend && npx playwright install chromium   # once
+make e2e                                         # or: cd frontend && npm run test:e2e
+```
+
+Needs Go and Node, and ports 8080 and 5173 free: Playwright starts `go run ./cmd/api` and the Vite dev server itself and stops them afterwards. Outside CI it reuses servers already running on those ports. Only Chromium is configured. The run takes a few seconds once the Go build cache is warm. `make test` does not run these tests, so the unit suites stay fast and browser-free. On failure, `frontend/playwright-report/` holds the HTML report.
 
 ### Coverage
 
@@ -176,17 +192,19 @@ Backend (statement coverage):
 |---|---|
 | `internal/calculator` | 100.0% |
 | `internal/http` | 94.0% |
-| `internal/config` | 0.0% (5-line env lookup, untested) |
+| `internal/config` | 100.0% |
 | `cmd/api` | 0.0% (process wiring, untested) |
-| **total** | **79.2%** |
+| **total** | **82.5%** |
 
-The total is pulled down by `main` and `config`, which have no tests; the packages with logic are at 100% and 94%. The uncovered blocks in `internal/http` are defensive: logging a failed response write, re-panicking `http.ErrAbortHandler`, the mapping for non-finite operands (unreachable through JSON), and the 404/405 rewriter's pass-through branches for other statuses (unclean-path redirects are tested, but `ServeMux` routes them through the matched-pattern path, not the rewriter).
+The total is pulled down by `main`, which has no tests; the packages with logic are at 100% and 94%. The uncovered blocks in `internal/http` are defensive: logging a failed response write, re-panicking `http.ErrAbortHandler`, the mapping for non-finite operands (unreachable through JSON), and the 404/405 rewriter's pass-through branches for other statuses (unclean-path redirects are tested, but `ServeMux` routes them through the matched-pattern path, not the rewriter).
 
 Frontend (all of `src/` except `main.tsx` and test setup):
 
 | Statements | Branches | Functions | Lines |
 |---|---|---|---|
 | 98.75% (159/161) | 93.81% (91/97) | 100% (47/47) | 100% (133/133) |
+
+The end-to-end tests are not part of these figures.
 
 Reports:
 
@@ -350,6 +368,7 @@ docker compose down           # or: make docker-down
 
 - Backend: `gofmt` check, `go vet`, `go test -race -cover`.
 - Frontend: `npm ci`, lint, test, build.
+- End-to-end: installs Go, Node and Chromium, runs `npm run test:e2e` (Playwright starts both servers), and uploads `frontend/playwright-report/` as an artifact if it fails.
 
 ## Design decisions
 
@@ -382,4 +401,4 @@ Semantics chosen where the assignment is silent:
 - **Request handling.** `Content-Type` is not enforced. Operation names are case-sensitive.
 - **No client-side timeout.** The frontend does not time out requests itself; the backend's 10 s write timeout bounds them.
 - **Not built, on purpose:** database, authentication, rate limiting, calculation history, expression parsing, frontend state/query/UI libraries.
-- **Verification gaps.** No screen-reader testing; colour contrast was not measured with a tool; only Chromium was driven in browser checks. `cmd/api` and `internal/config` have no unit tests.
+- **Verification gaps.** No screen-reader testing; colour contrast was not measured with a tool; only Chromium was driven in browser checks, and the end-to-end suite runs only in Chromium. `cmd/api` has no tests.
