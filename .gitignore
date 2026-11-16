@@ -1,0 +1,30 @@
+# Go
+backend/bin/
+*.test
+*.out
+coverage.out
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+npm-debug.log*
+*.log
+
+# Coverage
+coverage/
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+*.local
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.sw?
