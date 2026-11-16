@@ -5,13 +5,20 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"calculator/backend/internal/calculator"
 )
 
 // NewRouter returns the application's HTTP handler.
 func NewRouter() http.Handler {
+	return newRouter(calculator.Calculate)
+}
+
+func newRouter(calc calculateFunc) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
-	return mux
+	mux.Handle("POST /api/v1/calculations", handleCalculate(calc))
+	return recoverPanics(jsonMuxErrors(mux))
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
