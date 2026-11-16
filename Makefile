@@ -1,6 +1,6 @@
 .PHONY: install backend-run backend-test backend-lint backend-build backend-coverage \
 	frontend-dev frontend-test frontend-lint frontend-build frontend-coverage \
-	test lint build coverage
+	test lint build coverage docker-up docker-down
 
 install:
 	cd frontend && npm ci
@@ -40,3 +40,9 @@ test: backend-test frontend-test
 lint: backend-lint frontend-lint
 build: backend-build frontend-build
 coverage: backend-coverage frontend-coverage
+
+docker-up:
+	docker compose up --build
+
+docker-down:
+	docker compose down
