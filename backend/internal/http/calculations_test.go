@@ -123,7 +123,7 @@ func TestCalculationBodyTooLarge(t *testing.T) {
 }
 
 func TestMethodNotAllowed(t *testing.T) {
-	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
 			rec := do(t, NewRouter(), method, "/api/v1/calculations", "")
 			assertError(t, rec, 405, codeMethodNotAllowed)

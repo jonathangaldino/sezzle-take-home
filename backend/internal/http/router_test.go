@@ -7,6 +7,19 @@ import (
 	"testing"
 )
 
+// The 404/405 rewriter must leave the mux's path-cleaning redirect untouched.
+func TestUncleanPathRedirects(t *testing.T) {
+	rec := httptest.NewRecorder()
+	NewRouter().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/./calculations", nil))
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/api/v1/calculations" {
+		t.Errorf("Location = %q, want /api/v1/calculations", loc)
+	}
+}
+
 func TestHealth(t *testing.T) {
 	rec := httptest.NewRecorder()
 	NewRouter().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
