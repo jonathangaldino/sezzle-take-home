@@ -1,4 +1,4 @@
-# Vite 8 / Vitest 5 require Node ^22.12 || ^24.
+# jsdom 31 / Vitest 5 / Vite 8 together require Node ^22.22.2 || ^24.15 || >=26.
 FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

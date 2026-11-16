@@ -84,7 +84,7 @@ Frontend (`frontend/src/`):
 │   │   ├── features/calculator/      UI, hook, number parsing/formatting + tests
 │   │   ├── services/                 API client + tests
 │   │   ├── test/setup.ts
-│   │   ├── App.tsx, main.tsx, index.css
+│   │   └── App.tsx, main.tsx, index.css
 │   ├── .env.example
 │   ├── Dockerfile
 │   ├── nginx.conf                    serves the build, proxies /api/
@@ -106,7 +106,7 @@ The playbook's suggested `components/`, `hooks/` and `types/` directories were n
 | Tool | Version | Source of the requirement |
 |---|---|---|
 | Go | 1.26.5 or newer | `go` directive in `backend/go.mod` (with the default `GOTOOLCHAIN=auto`, an older Go 1.21+ downloads it) |
-| Node.js | 22.22+, 24.15+, or 26+ | intersection of the `engines` ranges of jsdom, Vitest and Vite |
+| Node.js | 22.22.2+, 24.15+, or 26+ | intersection of the `engines` ranges of jsdom, Vitest and Vite |
 | npm | bundled with Node | lockfile install via `npm ci` |
 | make | any | optional; every target wraps a plain command shown below |
 
@@ -348,7 +348,7 @@ docker compose down           # or: make docker-down
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- Backend: `gofmt` check, `go vet`, `go test`.
+- Backend: `gofmt` check, `go vet`, `go test -race -cover`.
 - Frontend: `npm ci`, lint, test, build.
 
 ## Design decisions

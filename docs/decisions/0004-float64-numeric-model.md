@@ -17,7 +17,7 @@ Rules enforced by `calculator.Calculate`:
 - Underflow is not an error: `1e-200 * 1e-200` returns `0`.
 - `-0` is normalised to `0`, so clients never display "-0".
 - `power` follows `math.Pow`, so `power(0, 0) = 1`.
-- `percentage(a, b)` is b% of a, computed as `a * b / 100`. For ordinary inputs this is more accurate than `a * (b / 100)`, because `b / 100` is usually inexact before the multiplication: `300 * 7 / 100 = 21`, whereas `300 * (7 / 100) = 21.000000000000004`. The cost is of reporting `RESULT_NOT_FINITE` when `a * b` overflows even though the true answer fits (`a = 1e308, b = 50`). Precision on normal inputs was preferred over range at the extreme.
+- `percentage(a, b)` is b% of a, computed as `a * b / 100`. For ordinary inputs this is more accurate than `a * (b / 100)`, because `b / 100` is usually inexact before the multiplication: `300 * 7 / 100 = 21`, whereas `300 * (7 / 100) = 21.000000000000004`. The cost is reporting `RESULT_NOT_FINITE` when `a * b` overflows even though the true answer fits (`a = 1e308, b = 50`). Precision on normal inputs was preferred over range at the extreme.
 
 The frontend displays results rounded to 15 significant digits (the most float64 always round-trips), so `0.1 + 0.2` shows `0.3` while the API returns `0.30000000000000004`. Inputs differing in the 13th–15th digit are still shown distinctly.
 
