@@ -93,13 +93,24 @@ describe('calculate', () => {
   })
 
   it('reports an unexpected response for a non-JSON error page', async () => {
-    fetchMock.mockResolvedValue(new Response('<html>Bad Gateway</html>', { status: 502 }))
+    fetchMock.mockResolvedValue(new Response('<html>Internal Server Error</html>', { status: 500 }))
 
     const error = await captureError(calculate({ operation: 'add', operands: [1, 2] }))
 
     expect(error.kind).toBe('unexpected')
-    expect(error.status).toBe(502)
-    expect(error.message).toMatch(/HTTP 502/)
+    expect(error.status).toBe(500)
+    expect(error.message).toMatch(/HTTP 500/)
+  })
+
+  it.each([502, 503, 504])('reports the service as unreachable when a proxy answers %d', async (status) => {
+    // What the Vite dev proxy sends when the backend is down: plain text, no API error body.
+    fetchMock.mockResolvedValue(new Response('', { status }))
+
+    const error = await captureError(calculate({ operation: 'add', operands: [1, 2] }))
+
+    expect(error.kind).toBe('network')
+    expect(error.status).toBe(status)
+    expect(error.message).toMatch(/could not reach/i)
   })
 
   it('reports an unexpected response for JSON errors without the documented shape', async () => {

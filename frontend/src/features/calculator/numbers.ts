@@ -15,7 +15,9 @@ export function parseOperand(raw: string): ParsedOperand {
   return { ok: true, value }
 }
 
-const SIGNIFICANT_DIGITS = 12
+// 15 is the most decimal digits float64 always round-trips: hides 0.1 + 0.2 noise without
+// misrepresenting inputs (12 showed 1.0000000000001 + 1 as "1 + 1 = 2").
+const SIGNIFICANT_DIGITS = 15
 
 // Presentation only: rounds the backend's value for display (0.30000000000000004 -> 0.3); never computes.
 export function formatNumber(value: number): string {

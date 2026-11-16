@@ -47,6 +47,7 @@ export class CalculatorApiError extends Error {
 }
 
 const CALCULATIONS_PATH = '/api/v1/calculations'
+const UNREACHABLE_MESSAGE = 'Could not reach the calculator service. Check your connection and try again.'
 
 function apiBaseUrl(): string {
   // Empty means same origin (the Vite dev server proxies /api to the backend).
@@ -91,10 +92,7 @@ export async function calculate(
   } catch (error) {
     // Callers abort on purpose; let them recognise their own cancellation.
     if (signal?.aborted) throw error
-    throw new CalculatorApiError(
-      'network',
-      'Could not reach the calculator service. Check your connection and try again.',
-    )
+    throw new CalculatorApiError('network', UNREACHABLE_MESSAGE)
   }
 
   let body: unknown
@@ -110,6 +108,10 @@ export async function calculate(
         code: body.error.code,
         status: response.status,
       })
+    }
+    // A proxy in front of the API (e.g. the Vite dev server) answers 502-504 when the backend is down.
+    if (response.status >= 502 && response.status <= 504) {
+      throw new CalculatorApiError('network', UNREACHABLE_MESSAGE, { status: response.status })
     }
     throw new CalculatorApiError(
       'unexpected',
