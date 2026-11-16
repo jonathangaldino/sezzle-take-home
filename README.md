@@ -17,6 +17,7 @@ A full-stack calculator: a React + TypeScript single-page app that sends every c
 - [Quick start](#quick-start)
 - [Tests and coverage](#tests-and-coverage)
 - [API reference](#api-reference)
+- [Calculation log](#calculation-log)
 - [Docker](#docker)
 - [CI](#ci)
 - [Design decisions](#design-decisions)
@@ -29,6 +30,7 @@ A full-stack calculator: a React + TypeScript single-page app that sends every c
 - Handles division by zero, negative square roots, overflow and other non-finite results, wrong operand counts, unknown operations and fields, `null` operands, malformed or oversized bodies.
 - UI: operation selector that adjusts the number of inputs, inline per-field validation with focus on the first invalid field, loading state, stale-request cancellation when inputs change, API errors shown verbatim, `aria-live` result region, light/dark theme via `prefers-color-scheme`, layout checked down to 320 px.
 - Graceful shutdown and server timeouts on the backend; health check at `GET /healthz`.
+- Every calculation request is appended to a local log file as one JSON line: operation, operands, and the result or the error ([Calculation log](#calculation-log)).
 
 ## Technology stack
 
@@ -73,11 +75,11 @@ Frontend (`frontend/src/`):
 .
 ├── .github/workflows/ci.yml          CI: Go, frontend and end-to-end checks
 ├── backend/
-│   ├── cmd/api/main.go               server entry point
+│   ├── cmd/api/main.go               server entry point + test
 │   ├── internal/
 │   │   ├── calculator/               domain logic + tests
 │   │   ├── config/                   env configuration + test
-│   │   └── http/                     router, handler, errors + tests
+│   │   └── http/                     router, handler, errors, calculation log + tests
 │   ├── Dockerfile
 │   └── go.mod
 ├── frontend/
@@ -129,6 +131,13 @@ make frontend-dev   # cd frontend && npm run dev            -> http://localhost:
 ```
 
 Open http://localhost:5173. The backend listens on `PORT` (default `8080`): `PORT=8081 make backend-run`.
+
+Backend environment variables:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `8080` | Listening port. Empty means the default. |
+| `CALC_LOG_FILE` | `calculations.log` (relative to the working directory, so `backend/calculations.log` with `make backend-run`) | [Calculation log](#calculation-log) path. Set to an empty value to disable the log. |
 
 ### How the frontend reaches the API
 
@@ -191,12 +200,12 @@ Backend (statement coverage):
 | Package | Coverage |
 |---|---|
 | `internal/calculator` | 100.0% |
-| `internal/http` | 94.0% |
+| `internal/http` | 94.9% |
 | `internal/config` | 100.0% |
-| `cmd/api` | 0.0% (process wiring, untested) |
-| **total** | **82.5%** |
+| `cmd/api` | 25.9% (opening the log file is tested; process wiring is not) |
+| **total** | **83.2%** |
 
-The total is pulled down by `main`, which has no tests; the packages with logic are at 100% and 94%. The uncovered blocks in `internal/http` are defensive: logging a failed response write, re-panicking `http.ErrAbortHandler`, the mapping for non-finite operands (unreachable through JSON), and the 404/405 rewriter's pass-through branches for other statuses (unclean-path redirects are tested, but `ServeMux` routes them through the matched-pattern path, not the rewriter).
+The total is pulled down by `main`, which has no tests beyond opening the log file; the packages with logic are at 100% and 94.9%. The uncovered blocks in `internal/http` are defensive: logging a failed response write, re-panicking `http.ErrAbortHandler`, the mapping for non-finite operands (unreachable through JSON), and the 404/405 rewriter's pass-through branches for other statuses (unclean-path redirects are tested, but `ServeMux` routes them through the matched-pattern path, not the rewriter).
 
 Frontend (all of `src/` except `main.tsx` and test setup):
 
@@ -352,7 +361,31 @@ X-Content-Type-Options: nosniff
 {"error":{"code":"NOT_FOUND","message":"Route not found"}}
 ```
 
-## Docker
+## Calculation log
+
+The backend appends one JSON line per `POST /api/v1/calculations` request to `CALC_LOG_FILE` (see [Quick start](#quick-start)), written with the standard library's `log/slog` JSON handler. The file is opened in append mode, created with permissions `0644` if missing, and closed on shutdown. If it cannot be opened, the server prints a warning to stderr and runs without the log. Lines from concurrent requests do not interleave: the slog handler writes each record with a single `Write` under a mutex.
+
+Captured from a local run (`divide 10 4`, `divide 1 0`, then a truncated body):
+
+```
+{"time":"2026-11-16T18:19:51.452988-03:00","level":"INFO","msg":"calculation","operation":"divide","operands":[10,4],"result":2.5}
+{"time":"2026-11-16T18:19:51.457091-03:00","level":"INFO","msg":"calculation","operation":"divide","operands":[1,0],"error":{"code":"DIVISION_BY_ZERO","message":"Cannot divide by zero"}}
+{"time":"2026-11-16T18:19:51.459558-03:00","level":"INFO","msg":"calculation","error":{"code":"INVALID_JSON","message":"Request body must be valid JSON matching the documented schema"}}
+```
+
+What each line contains:
+
+- **Success:** `operation`, `operands`, `result`.
+- **Rejected after the body was parsed** (missing operation or operands, `null` operand, unsupported operation, wrong operand count, division by zero, negative square root, non-finite result, internal error): the `operation` and `operands` that were received, each omitted if absent (`null` operands stay `null`), and `error` with the same `code` and `message` as the response.
+- **Body not accepted** (malformed JSON, wrong field type, unknown field, trailing data, body over 1 MB): only `error`. No request values are logged, because a partially decoded body is unreliable (a mistyped operand decodes as `0`).
+- Nothing else: no headers, client addresses or request IDs. Requests to other routes, and handler panics (which go to stderr), are not in this log.
+
+Request values are untrusted, so:
+
+- Strings are JSON-escaped by slog; a quote or newline in an operation name stays inside its field on one line.
+- An operation name is cut to 64 bytes and an error message to 256 bytes (the unsupported-operation message echoes the name), each marked with `...`.
+- At most 16 operands are logged; when there are more, `operand_count` holds the real number.
+
 
 ```sh
 docker compose up --build     # or: make docker-up
@@ -361,6 +394,7 @@ docker compose down           # or: make docker-down
 
 - Web UI: http://localhost:3000 (nginx serving the production build and proxying `/api/` to the backend).
 - API directly: http://localhost:8080.
+- Calculation log: the image sets `CALC_LOG_FILE=/tmp/calculations.log`, because the container runs as `nobody` and cannot write to its working directory. The file lives in the container only (no volume): it survives a container restart but not `docker compose down`. Read it with `docker compose exec backend cat /tmp/calculations.log`.
 
 ## CI
 
@@ -401,4 +435,5 @@ Semantics chosen where the assignment is silent:
 - **Request handling.** `Content-Type` is not enforced. Operation names are case-sensitive.
 - **No client-side timeout.** The frontend does not time out requests itself; the backend's 10 s write timeout bounds them.
 - **Not built, on purpose:** database, authentication, rate limiting, calculation history, expression parsing, frontend state/query/UI libraries.
-- **Verification gaps.** No screen-reader testing; colour contrast was not measured with a tool; only Chromium was driven in browser checks, and the end-to-end suite runs only in Chromium. `cmd/api` has no tests.
+- **Calculation log.** A plain local file with no rotation or size limit; it grows until removed. Not shared between instances.
+- **Verification gaps.** No screen-reader testing; colour contrast was not measured with a tool; only Chromium was driven in browser checks, and the end-to-end suite runs only in Chromium. `main` itself has no tests.

@@ -36,12 +36,15 @@ The developer then approved the proposal.
 | Documentation; Docker and CI | 08; 09 | two subagents in parallel |
 | Final audit | 10 | after this document was written |
 | Config test and Playwright end-to-end tests | after 10 | a further subagent; re-verified by the orchestrator |
+| Calculation log file | after running the app | a further subagent; re-verified by the orchestrator |
 
 Each subagent brief contained: the `PROMPTS.md` sections to read, the design decisions already settled, explicit out-of-scope items, a ban on state-changing git commands, and a list of validation commands that had to be actually run and reported with their real output.
 
 The PROMPT 07 reviewer was given the code and the assignment but none of the earlier agents' conclusions. It was asked to review, run the real stack end to end for the first time (curl through the Vite proxy, and a headless Chromium Playwright script kept outside the repository), and fix only meaningful issues.
 
 The PROMPT 10 final audit reported a backend total coverage of 79.2% (`internal/config` and `cmd/api` untested) and no end-to-end test in the repository. The developer decided to add a test for `internal/config` and Playwright end-to-end tests that run the browser against the real Go server and Vite dev server. A further Opus 5.5 subagent implemented them, and the orchestrator re-verified the result.
+
+After running the app locally, the developer asked for a calculation log written to a local file (operation, operands, and the result or the error). A further Opus 5.5 subagent implemented it, and the orchestrator re-verified the result.
 
 The resulting commits are visible with `git log`.
 

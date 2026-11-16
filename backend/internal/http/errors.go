@@ -35,8 +35,10 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorBody{errorDetail{Code: code, Message: message}})
 }
 
+const internalErrorMessage = "An unexpected error occurred"
+
 func writeInternalError(w http.ResponseWriter) {
-	writeError(w, http.StatusInternalServerError, codeInternal, "An unexpected error occurred")
+	writeError(w, http.StatusInternalServerError, codeInternal, internalErrorMessage)
 }
 
 // recoverPanics turns a handler panic into a generic 500 so internal details

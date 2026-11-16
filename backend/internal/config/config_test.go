@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestLoad(t *testing.T) {
 	tests := []struct {
@@ -21,4 +24,26 @@ func TestLoad(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadCalcLogFile(t *testing.T) {
+	t.Run("unset uses default", func(t *testing.T) {
+		t.Setenv("CALC_LOG_FILE", "") // registers restoration of the original value
+		os.Unsetenv("CALC_LOG_FILE")
+		if got := Load().CalcLogFile; got != "calculations.log" {
+			t.Errorf("Load().CalcLogFile = %q, want calculations.log", got)
+		}
+	})
+	t.Run("set overrides default", func(t *testing.T) {
+		t.Setenv("CALC_LOG_FILE", "/var/log/calc.log")
+		if got := Load().CalcLogFile; got != "/var/log/calc.log" {
+			t.Errorf("Load().CalcLogFile = %q, want /var/log/calc.log", got)
+		}
+	})
+	t.Run("empty disables", func(t *testing.T) {
+		t.Setenv("CALC_LOG_FILE", "")
+		if got := Load().CalcLogFile; got != "" {
+			t.Errorf("Load().CalcLogFile = %q, want empty", got)
+		}
+	})
 }

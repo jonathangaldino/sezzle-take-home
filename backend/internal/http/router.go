@@ -4,20 +4,25 @@ package httpapi
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/http"
 
 	"calculator/backend/internal/calculator"
 )
 
-// NewRouter returns the application's HTTP handler.
-func NewRouter() http.Handler {
-	return newRouter(calculator.Calculate)
+// NewRouter returns the application's HTTP handler. Every calculation request
+// is recorded on calcLog; nil disables the calculation log.
+func NewRouter(calcLog *slog.Logger) http.Handler {
+	return newRouter(calculator.Calculate, calcLog)
 }
 
-func newRouter(calc calculateFunc) http.Handler {
+func newRouter(calc calculateFunc, calcLog *slog.Logger) http.Handler {
+	if calcLog == nil {
+		calcLog = slog.New(slog.DiscardHandler)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
-	mux.Handle("POST /api/v1/calculations", handleCalculate(calc))
+	mux.Handle("POST /api/v1/calculations", handleCalculate(calc, calcLog))
 	return recoverPanics(jsonMuxErrors(mux))
 }
 

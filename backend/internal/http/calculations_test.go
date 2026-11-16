@@ -53,7 +53,7 @@ func TestCalculationSuccess(t *testing.T) {
 		{`{"operation":"sqrt","operands":[16]}`, calculationResponse{"sqrt", []float64{16}, 4}},
 		{`{"operation":"percentage","operands":[200,10]}`, calculationResponse{"percentage", []float64{200, 10}, 20}},
 	}
-	h := NewRouter()
+	h := NewRouter(nil)
 	for _, tt := range tests {
 		t.Run(tt.want.Operation, func(t *testing.T) {
 			rec := do(t, h, http.MethodPost, "/api/v1/calculations", tt.body)
@@ -102,7 +102,7 @@ func TestCalculationErrors(t *testing.T) {
 		{"overflow", `{"operation":"multiply","operands":[1e308,10]}`, 422, codeResultNotFinite},
 		{"NaN result", `{"operation":"power","operands":[-8,0.5]}`, 422, codeResultNotFinite},
 	}
-	h := NewRouter()
+	h := NewRouter(nil)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assertError(t, do(t, h, http.MethodPost, "/api/v1/calculations", tt.body), tt.status, tt.code)
@@ -111,7 +111,7 @@ func TestCalculationErrors(t *testing.T) {
 }
 
 func TestDomainErrorMessage(t *testing.T) {
-	rec := do(t, NewRouter(), http.MethodPost, "/api/v1/calculations", `{"operation":"divide","operands":[1,0]}`)
+	rec := do(t, NewRouter(nil), http.MethodPost, "/api/v1/calculations", `{"operation":"divide","operands":[1,0]}`)
 	if got := assertError(t, rec, 422, codeDivisionByZero).Message; got != "Cannot divide by zero" {
 		t.Errorf("message = %q, want %q", got, "Cannot divide by zero")
 	}
@@ -119,13 +119,13 @@ func TestDomainErrorMessage(t *testing.T) {
 
 func TestCalculationBodyTooLarge(t *testing.T) {
 	body := `{"operation":"add","operands":[1,2],"pad":"` + strings.Repeat("a", maxBodyBytes) + `"}`
-	assertError(t, do(t, NewRouter(), http.MethodPost, "/api/v1/calculations", body), 413, codeRequestTooLarge)
+	assertError(t, do(t, NewRouter(nil), http.MethodPost, "/api/v1/calculations", body), 413, codeRequestTooLarge)
 }
 
 func TestMethodNotAllowed(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			rec := do(t, NewRouter(), method, "/api/v1/calculations", "")
+			rec := do(t, NewRouter(nil), method, "/api/v1/calculations", "")
 			assertError(t, rec, 405, codeMethodNotAllowed)
 			if allow := rec.Header().Get("Allow"); allow != "POST" {
 				t.Errorf("Allow = %q, want POST", allow)
@@ -137,7 +137,7 @@ func TestMethodNotAllowed(t *testing.T) {
 func TestNotFound(t *testing.T) {
 	for _, path := range []string{"/", "/api/v1/unknown", "/api/v2/calculations"} {
 		t.Run(path, func(t *testing.T) {
-			assertError(t, do(t, NewRouter(), http.MethodPost, path, "{}"), 404, codeNotFound)
+			assertError(t, do(t, NewRouter(nil), http.MethodPost, path, "{}"), 404, codeNotFound)
 		})
 	}
 }
@@ -150,7 +150,7 @@ func TestInternalErrors(t *testing.T) {
 	}
 	for name, calc := range tests {
 		t.Run(name, func(t *testing.T) {
-			rec := do(t, newRouter(calc), http.MethodPost, "/api/v1/calculations", `{"operation":"add","operands":[1,2]}`)
+			rec := do(t, newRouter(calc, nil), http.MethodPost, "/api/v1/calculations", `{"operation":"add","operands":[1,2]}`)
 			detail := assertError(t, rec, 500, codeInternal)
 			if strings.Contains(detail.Message, secret) {
 				t.Errorf("internal error leaked to client: %q", detail.Message)

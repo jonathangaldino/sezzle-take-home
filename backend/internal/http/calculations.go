@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -28,26 +29,34 @@ type calculationResponse struct {
 	Result    float64   `json:"result"`
 }
 
-func handleCalculate(calc calculateFunc) http.HandlerFunc {
+func handleCalculate(calc calculateFunc, calcLog *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req calculationRequest
-		if status, code, msg := decodeJSON(w, r, &req); status != 0 {
+		fail := func(status int, code, msg string) {
+			logCalculation(calcLog, req, slog.Group("error", "code", code, "message", truncate(msg, maxLoggedMessageBytes)))
 			writeError(w, status, code, msg)
+		}
+
+		if status, code, msg := decodeJSON(w, r, &req); status != 0 {
+			// The body was rejected and encoding/json leaves partial values behind
+			// (a mistyped operand decodes as 0), so log none of them.
+			req = calculationRequest{}
+			fail(status, code, msg)
 			return
 		}
 
 		if req.Operation == "" {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, `"operation" is required`)
+			fail(http.StatusBadRequest, codeInvalidRequest, `"operation" is required`)
 			return
 		}
 		if req.Operands == nil {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, `"operands" is required`)
+			fail(http.StatusBadRequest, codeInvalidRequest, `"operands" is required`)
 			return
 		}
 		operands := make([]float64, len(req.Operands))
 		for i, v := range req.Operands {
 			if v == nil {
-				writeError(w, http.StatusBadRequest, codeInvalidRequest, `"operands" must contain only numbers`)
+				fail(http.StatusBadRequest, codeInvalidRequest, `"operands" must contain only numbers`)
 				return
 			}
 			operands[i] = *v
@@ -55,9 +64,10 @@ func handleCalculate(calc calculateFunc) http.HandlerFunc {
 
 		result, err := calc(req.Operation, operands)
 		if err != nil {
-			writeCalculationError(w, err)
+			fail(calculationError(err))
 			return
 		}
+		logCalculation(calcLog, req, slog.Float64("result", result))
 		writeJSON(w, http.StatusOK, calculationResponse{Operation: req.Operation, Operands: operands, Result: result})
 	}
 }
@@ -87,9 +97,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) (status int, co
 	}
 }
 
-func writeCalculationError(w http.ResponseWriter, err error) {
-	var status int
-	var code string
+// calculationError maps a domain error to the status, code and client-safe
+// message to respond with.
+func calculationError(err error) (status int, code, msg string) {
 	switch {
 	case errors.Is(err, calculator.ErrUnsupportedOperation):
 		status, code = http.StatusBadRequest, codeUnsupportedOperation
@@ -105,11 +115,10 @@ func writeCalculationError(w http.ResponseWriter, err error) {
 		status, code = http.StatusUnprocessableEntity, codeResultNotFinite
 	default:
 		log.Printf("calculate: unexpected error: %v", err)
-		writeInternalError(w)
-		return
+		return http.StatusInternalServerError, codeInternal, internalErrorMessage
 	}
 	// Domain error messages are written for end users and contain no internals;
 	// capitalise them to match the API's message style ("Cannot divide by zero").
-	msg := err.Error()
-	writeError(w, status, code, strings.ToUpper(msg[:1])+msg[1:])
+	msg = err.Error()
+	return status, code, strings.ToUpper(msg[:1]) + msg[1:]
 }
