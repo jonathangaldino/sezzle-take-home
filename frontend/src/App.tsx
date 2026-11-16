@@ -1,7 +1,10 @@
+import styles from './App.module.css'
+import { Calculator } from './features/calculator/Calculator'
+
 function App() {
   return (
-    <main>
-      <h1>Calculator</h1>
+    <main className={styles.main}>
+      <Calculator />
     </main>
   )
 }
