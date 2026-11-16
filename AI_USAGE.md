@@ -88,4 +88,4 @@ Deviations from the playbook:
 - No screen-reader testing.
 - Colour contrast was not measured with a tool.
 - Only Chromium was driven in browser checks, and the end-to-end suite is configured for Chromium only.
-- The GitHub Actions workflow, including the end-to-end job, was not executed locally.
+- The GitHub Actions workflow, including the end-to-end job, was not executed locally. Its first runs on GitHub after the push passed.
