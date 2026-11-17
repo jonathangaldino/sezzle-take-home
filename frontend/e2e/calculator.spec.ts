@@ -2,8 +2,9 @@ import { expect, test, type Page } from '@playwright/test'
 
 const CALCULATIONS = '**/api/v1/calculations'
 
-async function selectOperation(page: Page, label: string) {
-  await page.getByLabel('Operation').selectOption({ label })
+/** Clicks keypad keys by accessible name, e.g. press(page, '1', '2', 'Add'). */
+async function press(page: Page, ...names: string[]) {
+  for (const name of names) await page.getByRole('button', { name, exact: true }).click()
 }
 
 test.beforeEach(async ({ page }) => {
@@ -11,106 +12,74 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('shows the result computed by the backend', async ({ page }) => {
-  await selectOperation(page, 'Multiply (×)')
-  await page.getByLabel('First number', { exact: true }).fill('12')
-  await page.getByLabel('Second number', { exact: true }).fill('3.5')
+  await press(page, '1', '2', 'Multiply', '3', 'Decimal point', '5')
 
   const response = page.waitForResponse(CALCULATIONS)
-  await page.getByRole('button', { name: 'Calculate' }).click()
+  await press(page, 'Equals')
   expect(await (await response).json()).toEqual({ operation: 'multiply', operands: [12, 3.5], result: 42 })
 
   const result = page.getByRole('region', { name: 'Result' })
   await expect(result).toContainText('12 × 3.5 =')
-  await expect(result.getByText('42', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('42')
 })
 
-test('square root uses a single operand', async ({ page }) => {
-  await selectOperation(page, 'Square root (√)')
-  await expect(page.getByRole('textbox')).toHaveCount(1)
-  await page.getByLabel('Number', { exact: true }).fill('16')
-  await page.getByRole('button', { name: 'Calculate' }).click()
+test('chains operations left to right', async ({ page }) => {
+  await press(page, '2', 'Add', '3', 'Multiply', '4', 'Equals')
+  await expect(page.getByRole('status')).toHaveText('20')
+})
 
-  const result = page.getByRole('region', { name: 'Result' })
-  await expect(result).toContainText('√16 =')
-  await expect(result.getByText('4', { exact: true })).toBeVisible()
+test('square root applies to the displayed number', async ({ page }) => {
+  await press(page, '1', '6', 'Square root')
+
+  await expect(page.getByRole('region', { name: 'Result' })).toContainText('√16 =')
+  await expect(page.getByRole('status')).toHaveText('4')
 })
 
 test('percentage is b% of a', async ({ page }) => {
-  await selectOperation(page, 'Percentage (%)')
-  await page.getByLabel('Value', { exact: true }).fill('200')
-  await page.getByLabel('Percent', { exact: true }).fill('10')
-  await page.getByRole('button', { name: 'Calculate' }).click()
+  await press(page, '2', '0', '0', 'Percentage', '1', '0', 'Equals')
 
-  const result = page.getByRole('region', { name: 'Result' })
-  await expect(result).toContainText('10% of 200 =')
-  await expect(result.getByText('20', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Result' })).toContainText('10% of 200 =')
+  await expect(page.getByRole('status')).toHaveText('20')
 })
 
 test('division by zero shows the backend error message', async ({ page }) => {
-  await selectOperation(page, 'Divide (÷)')
-  await page.getByLabel('Dividend', { exact: true }).fill('10')
-  await page.getByLabel('Divisor', { exact: true }).fill('0')
+  await press(page, '1', '0', 'Divide', '0')
 
   const response = page.waitForResponse(CALCULATIONS)
-  await page.getByRole('button', { name: 'Calculate' }).click()
+  await press(page, 'Equals')
   expect((await response).status()).toBe(422)
 
   await expect(page.getByRole('alert')).toHaveText('Cannot divide by zero')
 })
 
-test('invalid input is rejected without calling the API', async ({ page }) => {
-  let requests = 0
-  page.on('request', (request) => {
-    if (request.url().includes('/api/')) requests++
-  })
-
-  const first = page.getByLabel('First number', { exact: true })
-  await first.fill('abc')
-  await page.getByLabel('Second number', { exact: true }).fill('2')
-  await page.getByRole('button', { name: 'Calculate' }).click()
-
-  await expect(page.getByText('Enter a valid number, like 42 or -3.5.')).toBeVisible()
-  await expect(first).toHaveAttribute('aria-invalid', 'true')
-  await expect(first).toBeFocused()
-  expect(requests).toBe(0)
-})
-
 test('the displayed result hides float64 noise from the backend', async ({ page }) => {
-  await page.getByLabel('First number', { exact: true }).fill('0.1')
-  await page.getByLabel('Second number', { exact: true }).fill('0.2')
+  await press(page, 'Decimal point', '1', 'Add', 'Decimal point', '2')
 
   const response = page.waitForResponse(CALCULATIONS)
-  await page.getByRole('button', { name: 'Calculate' }).click()
+  await press(page, 'Equals')
   expect((await (await response).json()).result).toBe(0.30000000000000004)
 
-  const result = page.getByRole('region', { name: 'Result' })
-  await expect(result.getByText('0.3', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status')).toHaveText('0.3')
 })
 
-test('Clear resets the form', async ({ page }) => {
-  await selectOperation(page, 'Divide (÷)')
-  await page.getByLabel('Dividend', { exact: true }).fill('9')
-  await page.getByLabel('Divisor', { exact: true }).fill('3')
-  await page.getByRole('button', { name: 'Calculate' }).click()
-  const result = page.getByRole('region', { name: 'Result' })
-  await expect(result.getByText('3', { exact: true })).toBeVisible()
+test('works from the keyboard', async ({ page }) => {
+  // Keys sent before React mounts would go nowhere.
+  await expect(page.getByRole('status')).toHaveText('0')
+  await page.keyboard.type('9-4')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('status')).toHaveText('5')
 
-  await page.getByRole('button', { name: 'Clear' }).click()
-
-  await expect(page.getByLabel('Operation')).toHaveValue('add')
-  await expect(page.getByLabel('First number', { exact: true })).toHaveValue('')
-  await expect(page.getByLabel('Second number', { exact: true })).toHaveValue('')
-  await expect(result).toHaveText('Enter values and press Calculate.')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('status')).toHaveText('0')
+  await expect(page.getByRole('region', { name: 'Result' })).not.toContainText('=')
 })
 
 test.describe('on a 375 px wide screen', () => {
   test.use({ viewport: { width: 375, height: 667 } })
 
-  test('the form works and the page does not scroll horizontally', async ({ page }) => {
-    await page.getByLabel('First number', { exact: true }).fill('7')
-    await page.getByLabel('Second number', { exact: true }).fill('5')
-    await page.getByRole('button', { name: 'Calculate' }).click()
-    await expect(page.getByRole('region', { name: 'Result' }).getByText('12', { exact: true })).toBeVisible()
+  test('the keypad works and the page does not scroll horizontally', async ({ page }) => {
+    await press(page, '7', 'Add', '5', 'Equals')
+    await expect(page.getByRole('status')).toHaveText('12')
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
