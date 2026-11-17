@@ -1,6 +1,6 @@
 # Calculator
 
-A full-stack calculator: a React + TypeScript single-page app that sends every calculation to a Go REST API. The backend owns all arithmetic and validation; the frontend validates input shape, calls the API and formats the result.
+A full-stack calculator: a React + TypeScript single-page app that sends every calculation to a Go REST API. The backend owns all arithmetic and validation; the frontend collects keypad input, calls the API and formats the result.
 
 - Assignment: [TASK.md](TASK.md)
 - Development playbook and prompts used: [PROMPTS.md](PROMPTS.md)
@@ -28,7 +28,7 @@ A full-stack calculator: a React + TypeScript single-page app that sends every c
 - Operations: add, subtract, multiply, divide, power, square root, percentage.
 - One versioned endpoint, `POST /api/v1/calculations`, with strict request validation and a uniform JSON error envelope (including 404/405).
 - Handles division by zero, negative square roots, overflow and other non-finite results, wrong operand counts, unknown operations and fields, `null` operands, malformed or oversized bodies.
-- UI: operation selector that adjusts the number of inputs, inline per-field validation with focus on the first invalid field, loading state, stale-request cancellation when inputs change, API errors shown verbatim, `aria-live` result region, light/dark theme via `prefers-color-scheme`, layout checked down to 320 px.
+- UI: keypad calculator (digits, `.`, `±`, `DEL`, `AC`, `+ − × ÷ ^ %`, `√`, `=`) with keyboard support. Binary operations go to the API on `=` or chain left to right when the next operator is pressed (`2 + 3 ×` computes `2 + 3` first); `√` applies to the displayed number at once; `a % b` means b% of a. Keys are ignored while a request is in flight, `AC` cancels it, API errors are shown verbatim, the result region is announced via `<output>`, layout checked down to 320 px. Light/dark theme switch (defaults to the OS preference, choice saved in `localStorage`). Collapsible history panel listing every result, grouped by Today / Previous 7 Days / Older; tapping an entry recalls its result. History lives only in the browser (`localStorage`, last 50); the backend stores none.
 - Graceful shutdown and server timeouts on the backend; health check at `GET /healthz`.
 - Every calculation request is appended to a local log file as one JSON line: operation, operands, and the result or the error ([Calculation log](#calculation-log)).
 
@@ -36,7 +36,7 @@ A full-stack calculator: a React + TypeScript single-page app that sends every c
 
 | Layer | Choice |
 |---|---|
-| Frontend | React 19, TypeScript, Vite 8, CSS Modules |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 4 |
 | Frontend tests | Vitest 5, React Testing Library, jsdom, `@vitest/coverage-v8` |
 | End-to-end tests | Playwright (Chromium only) against the real Go server and Vite dev server |
 | Frontend lint | oxlint (what the current Vite `react-ts` template ships, not ESLint) |
@@ -64,10 +64,11 @@ Backend (`backend/`):
 Frontend (`frontend/src/`):
 
 - `services/calculatorApi.ts`: typed `fetch` client. Classifies failures as `network` (no response, or a 502/503/504 from a proxy without the API envelope), `api` (documented error body) or `unexpected`.
-- `features/calculator/useCalculator.ts`: form state, validation, request lifecycle with `AbortController`.
-- `features/calculator/numbers.ts`: input parsing (plain decimal literals only) and display formatting (up to 15 significant digits). No arithmetic.
-- `features/calculator/operations.ts`: operation labels, symbols and operand labels (whose count matches the backend's arity).
-- `Calculator.tsx`, `OperandField.tsx`, `ResultPanel.tsx`: presentation.
+- `features/calculator/useCalculator.ts`: keypad state machine (entry, pending operation, chaining), request lifecycle with `AbortController`. Results are kept at full precision for the next operation and only rounded for display.
+- `features/calculator/numbers.ts`: display formatting (up to 15 significant digits). No arithmetic.
+- `features/calculator/operations.ts`: operation labels (the keys' accessible names) and symbols.
+- `features/calculator/history.ts`: history persistence (validated on load) and date grouping.
+- `Calculator.tsx`, `HistoryPanel.tsx`, `features/theme/ThemeToggle.tsx`: presentation (Tailwind; theme colours are CSS variables in `index.css`), keyboard shortcuts.
 
 ## Directory structure
 
@@ -176,11 +177,11 @@ make coverage
 | `backend/internal/calculator` | every operation, arity checks, non-finite operands, division by zero, negative sqrt, overflow, `power` edge cases, `-0` normalisation |
 | `backend/internal/http` | status codes and error codes for every error path via `httptest`, unknown fields, `null` operands, trailing data, 1 MB limit, JSON 404/405 with `Allow` (incl. HEAD/OPTIONS), unclean-path redirects, panic recovery, unexpected domain errors |
 | `frontend/src/services` | API client: success, envelope errors, network failure, proxy 502/503/504, malformed responses, abort, base URL handling |
-| `frontend/src/features/calculator`, `App` | parsing/formatting rules, form behaviour, validation and focus, loading, error display, clearing stale results |
+| `frontend/src/features/calculator`, `App` | formatting rules, number entry (decimal point, 15-digit limit, `DEL`, `±`), each operation's request, left-to-right chaining, operator replacement, full precision between steps, keys ignored while loading, `AC` aborting the request, error display, keyboard input |
 | `backend/internal/config` | default port, `PORT` override |
-| `frontend/e2e` (Playwright) | the browser against the real Go server through the Vite proxy, no mocking: a binary operation, square root with one operand, percentage, the division-by-zero message from the backend, invalid input blocked with no request sent, `0.1 + 0.2` displayed as `0.3`, Clear, and a 375 px viewport with no horizontal scroll |
+| `frontend/e2e` (Playwright) | the browser against the real Go server through the Vite proxy, no mocking: a binary operation, chaining, square root, percentage, the division-by-zero message from the backend, `0.1 + 0.2` displayed as `0.3`, keyboard input and `Escape`, and a 375 px viewport with no horizontal scroll |
 
-Totals at the time of writing: backend 12 test functions (105 passing tests including subtests); frontend 77 unit tests in 4 files; 8 end-to-end tests.
+Totals at the time of writing: backend 12 test functions (105 passing tests including subtests); frontend 64 unit tests in 6 files; 8 end-to-end tests.
 
 ### End-to-end tests
 
@@ -410,7 +411,7 @@ Each decision has a short ADR with context and consequences in [docs/decisions/]
 
 | Decision | Trade-off | ADR |
 |---|---|---|
-| The backend owns all arithmetic; the frontend only validates input shape and formats output | Single source of truth for semantics, at the cost of a round trip per calculation | [0001](docs/decisions/0001-backend-owns-calculation-logic.md) |
+| The backend owns all arithmetic; the frontend only collects input and formats output | Single source of truth for semantics, at the cost of a round trip per calculation | [0001](docs/decisions/0001-backend-owns-calculation-logic.md) |
 | Go standard library only (`ServeMux` method patterns, `encoding/json`), no framework or router | No dependencies; a little hand-written plumbing (JSON 404/405, unknown-field mapping) | [0002](docs/decisions/0002-go-standard-library-only.md) |
 | One error envelope with stable codes; 400 for malformed, 422 for mathematically invalid, 413 for oversized | Codes become part of the public contract | [0003](docs/decisions/0003-error-envelope-and-status-mapping.md) |
 | float64 end to end | Native in Go, JSON and JS; not decimal-exact | [0004](docs/decisions/0004-float64-numeric-model.md) |
