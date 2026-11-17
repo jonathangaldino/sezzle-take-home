@@ -1,20 +1,6 @@
 import type { Operation } from '../../services/calculatorApi'
 import { getOperation } from './operations'
 
-export type ParsedOperand = { ok: true; value: number } | { ok: false; error: string }
-
-// Plain decimal with optional sign and exponent. Rejects "1e", "1,5", "Infinity", "NaN", hex, etc.
-const DECIMAL_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i
-
-export function parseOperand(raw: string): ParsedOperand {
-  const text = raw.trim()
-  if (text === '') return { ok: false, error: 'Enter a number.' }
-  if (!DECIMAL_PATTERN.test(text)) return { ok: false, error: 'Enter a valid number, like 42 or -3.5.' }
-  const value = Number(text)
-  if (!Number.isFinite(value)) return { ok: false, error: 'This number is too large.' }
-  return { ok: true, value }
-}
-
 // 15 is the most decimal digits float64 always round-trips: hides 0.1 + 0.2 noise without
 // misrepresenting inputs (12 showed 1.0000000000001 + 1 as "1 + 1 = 2").
 const SIGNIFICANT_DIGITS = 15

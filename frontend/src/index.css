@@ -1,72 +1,99 @@
-:root {
-  color-scheme: light dark;
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f7f8fa;
-  --color-border: #d4d7de;
-  --color-border-strong: #8a909c;
-  --color-text: #15171c;
-  --color-text-muted: #555b66;
-  --color-accent: #3b45c4;
-  --color-accent-hover: #2f38a6;
-  --color-on-accent: #ffffff;
-  --color-danger: #b42318;
-  --color-danger-bg: #fef3f2;
-  --color-danger-border: #f2c3bd;
-  --color-focus: #3b45c4;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 6%), 0 8px 24px rgb(16 24 40 / 8%);
-  --radius: 10px;
+@import 'tailwindcss';
 
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  line-height: 1.5;
-  color: var(--color-text);
-  background: var(--color-bg);
-  -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
+/* Theme follows the `dark` class on <html> (set by index.html and ThemeToggle), not the media query. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: Poppins, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --color-accent: #ef7d2b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0e1014;
-    --color-surface: #171a21;
-    --color-surface-muted: #1d2129;
-    --color-border: #2e333d;
-    --color-border-strong: #6b7280;
-    --color-text: #eceef2;
-    --color-text-muted: #a3a9b5;
-    --color-accent: #9aa5ff;
-    --color-accent-hover: #b4bcff;
-    --color-on-accent: #0e1014;
-    --color-danger: #ffb4ab;
-    --color-danger-bg: #2a1614;
-    --color-danger-border: #5c2a25;
-    --color-focus: #9aa5ff;
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 35%);
+@theme inline {
+  --color-page-from: var(--page-from);
+  --color-page-to: var(--page-to);
+  --color-card-from: var(--card-from);
+  --color-card-to: var(--card-to);
+  --color-key: var(--key);
+  --color-key-hover: var(--key-hover);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-danger: var(--danger);
+  --color-accent-text: var(--accent-text);
+  --color-track: var(--track);
+  --color-knob: var(--knob);
+  --shadow-card: var(--card-shadow);
+  --shadow-key: var(--key-shadow);
+  --shadow-key-pressed: var(--key-shadow-pressed);
+}
+
+:root {
+  color-scheme: light;
+  --page-from: #f4f3f8;
+  --page-to: #d5cfe0;
+  --card-from: #fbfbfd;
+  --card-to: #e7e6ee;
+  --key: #f1f1f5;
+  --key-hover: #ffffff;
+  --ink: #2a2a33;
+  --muted: #6b6b78;
+  --danger: #b42318;
+  /* Darker orange: --color-accent is too light for small text on the light card. */
+  --accent-text: #b4530f;
+  --track: #e2e2e9;
+  --knob: #ffffff;
+  --card-shadow: 12px 16px 32px rgb(60 50 80 / 0.18);
+  --key-shadow: 4px 5px 10px rgb(70 70 100 / 0.18), -3px -3px 8px rgb(255 255 255 / 0.9);
+  --key-shadow-pressed: 1px 2px 4px rgb(70 70 100 / 0.2);
+}
+
+.dark {
+  color-scheme: dark;
+  --page-from: #2b2433;
+  --page-to: #110e15;
+  --card-from: #464646;
+  --card-to: #262626;
+  --key: #2f2f2f;
+  --key-hover: #383838;
+  --ink: #ffffff;
+  --muted: rgb(255 255 255 / 0.5);
+  --danger: #fca5a5;
+  --accent-text: #ef7d2b;
+  --track: #1f1f1f;
+  --knob: #4a4a4a;
+  --card-shadow: 12px 16px 32px rgb(0 0 0 / 0.45);
+  --key-shadow: 4px 5px 10px rgb(0 0 0 / 0.5), -1px -1px 3px rgb(255 255 255 / 0.06);
+  --key-shadow-pressed: 1px 2px 4px rgb(0 0 0 / 0.5);
+}
+
+/* View Transitions (theme switch, history toggle); see src/viewTransition.ts. */
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The history panel has no counterpart on the other side, so it slides in/out instead of cross-fading. */
+::view-transition-new(history):only-child {
+  animation-name: history-in;
+}
+::view-transition-old(history):only-child {
+  animation-name: history-out;
+}
+
+@keyframes history-in {
+  from {
+    opacity: 0;
+    transform: translateX(-1.5rem) scale(0.97);
+  }
+}
+@keyframes history-out {
+  to {
+    opacity: 0;
+    transform: translateX(-1.5rem) scale(0.97);
   }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
 body {
-  margin: 0;
-  min-width: 320px;
-  background: var(--color-bg);
-}
-
-h1,
-p {
-  margin: 0;
-}
-
-button,
-input,
-select {
-  font: inherit;
-  color: inherit;
+  @apply min-w-80 bg-linear-to-br from-page-from to-page-to font-sans text-ink antialiased;
 }
